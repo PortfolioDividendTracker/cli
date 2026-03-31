@@ -134,8 +134,7 @@ func makeRunFunc(op spec.Operation) func(cmd *cobra.Command, args []string) erro
 		}
 
 		if statusCode >= 400 {
-			fmt.Fprintln(os.Stderr, string(result))
-			return fmt.Errorf("HTTP %d", statusCode)
+			return formatAPIError(result, statusCode)
 		}
 
 		var prettyJSON json.RawMessage
@@ -152,5 +151,39 @@ func makeRunFunc(op spec.Operation) func(cmd *cobra.Command, args []string) erro
 
 		fmt.Println(string(formatted))
 		return nil
+	}
+}
+
+func formatAPIError(body []byte, statusCode int) error {
+	var apiErr struct {
+		Message string            `json:"message"`
+		Errors  map[string][]string `json:"errors"`
+	}
+
+	if err := json.Unmarshal(body, &apiErr); err != nil || apiErr.Message == "" {
+		// Can't parse — show raw body
+		fmt.Fprintln(os.Stderr, string(body))
+		return fmt.Errorf("HTTP %d", statusCode)
+	}
+
+	switch statusCode {
+	case 401:
+		return fmt.Errorf("authentication failed: %s\nCheck your token with: pdt config get token", apiErr.Message)
+	case 403:
+		return fmt.Errorf("access denied: %s", apiErr.Message)
+	case 404:
+		return fmt.Errorf("not found: %s", apiErr.Message)
+	case 422:
+		msg := fmt.Sprintf("validation failed: %s", apiErr.Message)
+		for field, errs := range apiErr.Errors {
+			for _, e := range errs {
+				msg += fmt.Sprintf("\n  %s: %s", field, e)
+			}
+		}
+		return fmt.Errorf("%s", msg)
+	case 429:
+		return fmt.Errorf("rate limited: %s", apiErr.Message)
+	default:
+		return fmt.Errorf("error %d: %s", statusCode, apiErr.Message)
 	}
 }
