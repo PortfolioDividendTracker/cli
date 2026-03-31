@@ -26,16 +26,23 @@ func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
 			RunE:  makeRunFunc(op),
 		}
 
+		registered := make(map[string]bool)
+
 		for _, p := range op.PathParams {
 			cmd.Flags().String(p.Name, "", p.Description)
 			cmd.MarkFlagRequired(p.Name)
+			registered[p.Name] = true
 		}
 
 		for _, p := range op.QueryParams {
+			if registered[p.Name] {
+				continue
+			}
 			cmd.Flags().String(p.Name, "", p.Description)
 			if p.Required {
 				cmd.MarkFlagRequired(p.Name)
 			}
+			registered[p.Name] = true
 		}
 
 		if op.HasBody {
