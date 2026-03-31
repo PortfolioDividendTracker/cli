@@ -53,11 +53,12 @@ func TestParseOperations(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "openapi.json")
 	os.WriteFile(path, []byte(specJSON), 0600)
 
-	ops, err := spec.ParseOperations(path)
+	result, err := spec.ParseOperations(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	ops := result.Operations
 	if len(ops) != 4 {
 		t.Fatalf("expected 4 operations, got %d", len(ops))
 	}

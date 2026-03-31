@@ -19,6 +19,7 @@ type Operation struct {
 	OperationID string
 	CommandName string
 	Group       string
+	Tag         string
 	SubCommand  string
 	Method      string
 	Path        string
@@ -28,8 +29,13 @@ type Operation struct {
 	HasBody     bool
 }
 
-// ParseOperations reads an OpenAPI spec file and returns all operations as a slice.
-func ParseOperations(path string) ([]Operation, error) {
+type ParseResult struct {
+	Operations      []Operation
+	TagDescriptions map[string]string // tag name → description
+}
+
+// ParseOperations reads an OpenAPI spec file and returns all operations and tag descriptions.
+func ParseOperations(path string) (*ParseResult, error) {
 	loader := openapi3.NewLoader()
 	doc, err := loader.LoadFromFile(path)
 	if err != nil {
@@ -37,6 +43,14 @@ func ParseOperations(path string) ([]Operation, error) {
 	}
 
 	// Skip validation — real-world specs may have quirks and we only need paths/operations.
+
+	// Build tag description map
+	tagDescs := make(map[string]string)
+	for _, tag := range doc.Tags {
+		if tag.Description != "" {
+			tagDescs[tag.Name] = tag.Description
+		}
+	}
 
 	var ops []Operation
 
@@ -47,12 +61,17 @@ func ParseOperations(path string) ([]Operation, error) {
 			}
 
 			cmdName := OperationIDToCommandName(op.OperationID)
+			tag := ""
+			if len(op.Tags) > 0 {
+				tag = op.Tags[0]
+			}
 			group, subCmd := TagToGroupAndSubCommand(op.Tags, cmdName)
 
 			operation := Operation{
 				OperationID: op.OperationID,
 				CommandName: cmdName,
 				Group:       group,
+				Tag:         tag,
 				SubCommand:  subCmd,
 				Method:      strings.ToUpper(method),
 				Path:        path,
@@ -91,7 +110,10 @@ func ParseOperations(path string) ([]Operation, error) {
 		}
 	}
 
-	return ops, nil
+	return &ParseResult{
+		Operations:      ops,
+		TagDescriptions: tagDescs,
+	}, nil
 }
 
 var camelSplitter = regexp.MustCompile(`([a-z])([A-Z])`)

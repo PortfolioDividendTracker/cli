@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/PortfolioDividendTracker/cli/internal/client"
 	"github.com/PortfolioDividendTracker/cli/internal/config"
@@ -11,17 +12,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func firstSentence(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, ". "); i != -1 {
+		return s[:i+1]
+	}
+	if i := strings.Index(s, ".\n"); i != -1 {
+		return s[:i+1]
+	}
+	// Truncate at first newline if no period
+	if i := strings.IndexByte(s, '\n'); i != -1 {
+		return s[:i]
+	}
+	return s
+}
+
 // RegisterDynamicCommands parses the cached OpenAPI spec and registers grouped Cobra commands.
 // Operations are grouped by their OpenAPI tag into parent commands (e.g. "pdt bookings list").
 func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
-	ops, err := spec.ParseOperations(specPath)
+	result, err := spec.ParseOperations(specPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse OpenAPI spec: %w", err)
 	}
 
 	groups := make(map[string]*cobra.Command)
 
-	for _, op := range ops {
+	for _, op := range result.Operations {
 		op := op
 
 		subCmd := &cobra.Command{
@@ -60,9 +76,13 @@ func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
 
 		groupCmd, exists := groups[op.Group]
 		if !exists {
+			groupDesc := firstSentence(result.TagDescriptions[op.Tag])
+			if groupDesc == "" || strings.HasPrefix(groupDesc, "#") {
+				groupDesc = fmt.Sprintf("Manage %s", op.Group)
+			}
 			groupCmd = &cobra.Command{
 				Use:   op.Group,
-				Short: fmt.Sprintf("Manage %s", op.Group),
+				Short: groupDesc,
 			}
 			groups[op.Group] = groupCmd
 			root.AddCommand(groupCmd)
