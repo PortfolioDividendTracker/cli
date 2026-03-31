@@ -1,0 +1,11 @@
+# Binary
+pdt
+pdt.exe
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
