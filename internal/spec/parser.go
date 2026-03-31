@@ -18,6 +18,8 @@ type Param struct {
 type Operation struct {
 	OperationID string
 	CommandName string
+	Group       string
+	SubCommand  string
 	Method      string
 	Path        string
 	Summary     string
@@ -44,9 +46,14 @@ func ParseOperations(path string) ([]Operation, error) {
 				continue
 			}
 
+			cmdName := OperationIDToCommandName(op.OperationID)
+			group, subCmd := TagToGroupAndSubCommand(op.Tags, cmdName)
+
 			operation := Operation{
 				OperationID: op.OperationID,
-				CommandName: OperationIDToCommandName(op.OperationID),
+				CommandName: cmdName,
+				Group:       group,
+				SubCommand:  subCmd,
 				Method:      strings.ToUpper(method),
 				Path:        path,
 				Summary:     op.Summary,
@@ -112,4 +119,78 @@ func OperationIDToCommandName(operationID string) string {
 	}, result)
 
 	return result
+}
+
+// TagToGroupAndSubCommand extracts a CLI group and subcommand from an OpenAPI tag and command name.
+// For example: tag "User → Bookings" with command "list-bookings" → group "bookings", subcommand "list".
+// Tag "Portfolio → Gains" with command "get-portfolio-gains" → group "portfolio", subcommand "gains".
+// Tag "Portfolio" with command "get-portfolio" → group "portfolio", subcommand "get".
+func TagToGroupAndSubCommand(tags []string, commandName string) (string, string) {
+	if len(tags) == 0 {
+		return "", commandName
+	}
+
+	tag := tags[0]
+
+	// Split tag into segments: "User → Bookings" → ["User", "Bookings"]
+	segments := strings.Split(tag, "→")
+	for i := range segments {
+		segments[i] = strings.TrimSpace(segments[i])
+	}
+
+	// The last segment becomes the group name
+	lastSegment := segments[len(segments)-1]
+	group := segmentToKebab(lastSegment)
+
+	// Collect all tag segments as words to strip from the command name
+	var stripWords []string
+	for _, seg := range segments {
+		kebab := segmentToKebab(seg)
+		stripWords = append(stripWords, strings.Split(kebab, "-")...)
+	}
+
+	subCmd := stripWordsFromCommand(commandName, stripWords)
+
+	return group, subCmd
+}
+
+func segmentToKebab(segment string) string {
+	result := camelSplitter.ReplaceAllString(segment, "${1}-${2}")
+	result = strings.Map(func(r rune) rune {
+		if r == ' ' {
+			return '-'
+		}
+		if unicode.IsUpper(r) {
+			return unicode.ToLower(r)
+		}
+		return r
+	}, result)
+	return result
+}
+
+// stripWordsFromCommand removes tag-related words from a command name to derive the subcommand.
+// Handles singular/plural matching (e.g. "booking" matches "bookings" and vice versa).
+func stripWordsFromCommand(commandName string, words []string) string {
+	cmdParts := strings.Split(commandName, "-")
+
+	wordSet := make(map[string]bool)
+	for _, w := range words {
+		wordSet[w] = true
+		wordSet[strings.TrimSuffix(w, "s")] = true
+		wordSet[w+"s"] = true
+	}
+
+	var result []string
+	for _, cp := range cmdParts {
+		if wordSet[cp] || wordSet[strings.TrimSuffix(cp, "s")] {
+			continue
+		}
+		result = append(result, cp)
+	}
+
+	if len(result) == 0 {
+		return cmdParts[0]
+	}
+
+	return strings.Join(result, "-")
 }

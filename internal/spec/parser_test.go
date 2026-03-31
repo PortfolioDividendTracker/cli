@@ -110,6 +110,39 @@ func TestParseCommandName(t *testing.T) {
 	}
 }
 
+func TestTagToGroupAndSubCommand(t *testing.T) {
+	tests := []struct {
+		tags      []string
+		cmdName   string
+		wantGroup string
+		wantSub   string
+	}{
+		{[]string{"User → Bookings"}, "list-bookings", "bookings", "list"},
+		{[]string{"User → Bookings"}, "get-booking", "bookings", "get"},
+		{[]string{"User → Bookings"}, "create-booking", "bookings", "create"},
+		{[]string{"User → Bookings"}, "delete-booking", "bookings", "delete"},
+		{[]string{"Portfolio"}, "get-portfolio", "portfolio", "get"},
+		{[]string{"Portfolio"}, "get-portfolio-holdings", "portfolio", "get-holdings"},
+		{[]string{"Portfolio → Gains"}, "get-portfolio-gains", "gains", "get"},
+		{[]string{"Portfolio → Performance"}, "get-portfolio-performance-chart", "performance", "get-chart"},
+		{[]string{"Portfolio → Investment Strategies"}, "list-investment-strategies", "investment-strategies", "list"},
+		{[]string{"Reference → Symbols"}, "search-symbols", "symbols", "search"},
+		{[]string{"Reference → Symbols"}, "get-symbol", "symbols", "get"},
+		{[]string{"User → Personal Access Tokens"}, "create-personal-access-token", "personal-access-tokens", "create"},
+		{[]string{"User → OAuth Authorizations"}, "revoke-all-authorizations", "oauth-authorizations", "revoke-all"},
+		{[]string{"Authentication"}, "oauth-authorize", "authentication", "oauth-authorize"},
+		{[]string{}, "some-command", "", "some-command"},
+	}
+
+	for _, tt := range tests {
+		group, sub := spec.TagToGroupAndSubCommand(tt.tags, tt.cmdName)
+		if group != tt.wantGroup || sub != tt.wantSub {
+			t.Errorf("TagToGroupAndSubCommand(%v, %q) = (%q, %q), want (%q, %q)",
+				tt.tags, tt.cmdName, group, sub, tt.wantGroup, tt.wantSub)
+		}
+	}
+}
+
 func findOp(ops []spec.Operation, id string) *spec.Operation {
 	for i := range ops {
 		if ops[i].OperationID == id {

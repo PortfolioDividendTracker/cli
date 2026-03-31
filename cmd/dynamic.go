@@ -11,17 +11,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// RegisterDynamicCommands parses the cached OpenAPI spec and registers a Cobra command for each operation.
+// RegisterDynamicCommands parses the cached OpenAPI spec and registers grouped Cobra commands.
+// Operations are grouped by their OpenAPI tag into parent commands (e.g. "pdt bookings list").
 func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
 	ops, err := spec.ParseOperations(specPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse OpenAPI spec: %w", err)
 	}
 
+	groups := make(map[string]*cobra.Command)
+
 	for _, op := range ops {
 		op := op
-		cmd := &cobra.Command{
-			Use:   op.CommandName,
+
+		subCmd := &cobra.Command{
+			Use:   op.SubCommand,
 			Short: op.Summary,
 			RunE:  makeRunFunc(op),
 		}
@@ -29,8 +33,8 @@ func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
 		registered := make(map[string]bool)
 
 		for _, p := range op.PathParams {
-			cmd.Flags().String(p.Name, "", p.Description)
-			cmd.MarkFlagRequired(p.Name)
+			subCmd.Flags().String(p.Name, "", p.Description)
+			subCmd.MarkFlagRequired(p.Name)
 			registered[p.Name] = true
 		}
 
@@ -38,18 +42,33 @@ func RegisterDynamicCommands(root *cobra.Command, specPath string) error {
 			if registered[p.Name] {
 				continue
 			}
-			cmd.Flags().String(p.Name, "", p.Description)
+			subCmd.Flags().String(p.Name, "", p.Description)
 			if p.Required {
-				cmd.MarkFlagRequired(p.Name)
+				subCmd.MarkFlagRequired(p.Name)
 			}
 			registered[p.Name] = true
 		}
 
 		if op.HasBody {
-			cmd.Flags().String("body", "", "Request body as JSON")
+			subCmd.Flags().String("body", "", "Request body as JSON")
 		}
 
-		root.AddCommand(cmd)
+		if op.Group == "" {
+			root.AddCommand(subCmd)
+			continue
+		}
+
+		groupCmd, exists := groups[op.Group]
+		if !exists {
+			groupCmd = &cobra.Command{
+				Use:   op.Group,
+				Short: fmt.Sprintf("Manage %s", op.Group),
+			}
+			groups[op.Group] = groupCmd
+			root.AddCommand(groupCmd)
+		}
+
+		groupCmd.AddCommand(subCmd)
 	}
 
 	return nil
