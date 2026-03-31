@@ -168,13 +168,13 @@ func formatAPIError(body []byte, statusCode int) error {
 
 	switch statusCode {
 	case 401:
-		return fmt.Errorf("authentication failed: %s\nCheck your token with: pdt config get token", apiErr.Message)
+		return fmt.Errorf("[401] authentication failed: %s\nCheck your token with: pdt config get token", apiErr.Message)
 	case 403:
-		return fmt.Errorf("access denied: %s", apiErr.Message)
+		return fmt.Errorf("[403] access denied: %s", apiErr.Message)
 	case 404:
-		return fmt.Errorf("not found: %s", apiErr.Message)
+		return fmt.Errorf("[404] not found: %s", apiErr.Message)
 	case 422:
-		msg := fmt.Sprintf("validation failed: %s", apiErr.Message)
+		msg := fmt.Sprintf("[422] validation failed: %s", apiErr.Message)
 		for field, errs := range apiErr.Errors {
 			for _, e := range errs {
 				msg += fmt.Sprintf("\n  %s: %s", field, e)
@@ -182,8 +182,8 @@ func formatAPIError(body []byte, statusCode int) error {
 		}
 		return fmt.Errorf("%s", msg)
 	case 429:
-		return fmt.Errorf("rate limited: %s", apiErr.Message)
+		return fmt.Errorf("[429] rate limited: %s", apiErr.Message)
 	default:
-		return fmt.Errorf("error %d: %s", statusCode, apiErr.Message)
+		return fmt.Errorf("[%d] %s", statusCode, apiErr.Message)
 	}
 }
